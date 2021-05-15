@@ -19,22 +19,47 @@ const PORT = process.env.PORT || 5000;
 app.use(bodyParser());
 
 // functions
-const { addUser, users, isValidUser, getUserByToken } = require('./user');
-
+const { users, isValidUser, getUserByToken } = require('./user');
+const socketConnections = [];
+var currentSongIdx = 0;
+var activeAt = null;
 io.on('connection', (socket) => {
 	socket.on('join', (token) => {
-		console.log('token', token);
-		let user = getUserByToken(token.token);
-		socket.emit('user', user, () => console.log('user', user));
-		socket.on('disconnect', () => {
-			console.log('disconnected');
+		console.log('Join');
+		socketConnections.push(socket.id);
+		socket.emit('event', {
+			type: 'init',
+			songIndex: currentSongIdx,
+			activeAt: activeAt,
+		});
+	});
+	socket.on('disconnect', () => {
+		console.log('disconnect');
+		socketConnections.forEach((itm, idx) => {
+			if (itm == socket.id) {
+				socketConnections.splice(idx, 1);
+			}
 		});
 	});
 
-	socket.on('prev', ({ songIndex, token }) => {
-		console.log('token', token);
-		let user = getUserByToken(token);
-		socket.broadcast.to(user.username).emit('previous', { songIndex });
+	socket.on('event', ({ type, value, token }) => {
+		switch (type) {
+			case 'clientRequestChange':
+				socket.broadcast.emit('event', { type: 'change', songIndex: value });
+				currentSongIdx = value;
+				break;
+			case 'clientPlayPauseChange':
+				if (value == 'play') {
+					activeAt = socket.id;
+					socket.broadcast.emit('event', {
+						type: 'playPause',
+						status: 'pause',
+						activeAt: socket.id,
+					});
+				}
+				break;
+		}
+		console.log(type, value, token, 'socket event');
 	});
 });
 
@@ -48,7 +73,6 @@ app.post('/login', (req, res) => {
 			password: req.body.password,
 		};
 		const isValid = isValidUser(newUser);
-		console.log('isValid', isValid);
 		if (isValid) {
 			let token = uuidv4();
 			let user = users.find((user) => user.username === newUser.username);
