@@ -24,7 +24,7 @@ const socketConnections = [];
 var currentSongIdx = 0;
 var activeAt = null;
 io.on('connection', (socket) => {
-	socket.on('join', (token) => {
+	socket.on('join', () => {
 		console.log('Join');
 		socketConnections.push(socket.id);
 		socket.emit('event', {
